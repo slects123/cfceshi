@@ -10,19 +10,7 @@ permissions:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14
-            arch: apple
-            artifact: mac-helper-apple
-            asset: TikTok-USB-Helper-macOS-Apple
-          - os: macos-13
-            arch: intel
-            artifact: mac-helper-intel
-            asset: TikTok-USB-Helper-macOS-Intel
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -45,34 +33,55 @@ jobs:
           cp /tmp/pt/platform-tools/adb .bundle/adb/adb
           chmod +x .bundle/adb/adb
 
-      - name: Build single file
+      - name: Build Apple Silicon + Intel
         run: |
-          ARGS=(--noconfirm --windowed --onefile --clean --name "TikTok免拔卡助手" --distpath dist)
-          ARGS+=(--add-data ".bundle/adb/adb:adb")
+          set -e
+          COMMON=(--noconfirm --windowed --onefile --clean --distpath dist)
+          COMMON+=(--add-data ".bundle/adb/adb:adb")
           for f in apks/*.apk; do
-            ARGS+=(--add-data "$f:apks")
+            COMMON+=(--add-data "$f:apks")
           done
-          python -m PyInstaller "${ARGS[@]}" app.py
-          codesign --force --sign - "dist/TikTok免拔卡助手" || true
-          cp "dist/TikTok免拔卡助手" "dist/${{ matrix.asset }}"
+
+          python -m PyInstaller "${COMMON[@]}" --target-arch arm64 --name "TikTok-USB-Helper-macOS-Apple" app.py
+          codesign --force --sign - "dist/TikTok-USB-Helper-macOS-Apple.app/Contents/MacOS/TikTok-USB-Helper-macOS-Apple" 2>/dev/null || \
+            codesign --force --sign - "dist/TikTok-USB-Helper-macOS-Apple" || true
+
+          python -m PyInstaller "${COMMON[@]}" --target-arch x86_64 --name "TikTok-USB-Helper-macOS-Intel" app.py
+          codesign --force --sign - "dist/TikTok-USB-Helper-macOS-Intel.app/Contents/MacOS/TikTok-USB-Helper-macOS-Intel" 2>/dev/null || \
+            codesign --force --sign - "dist/TikTok-USB-Helper-macOS-Intel" || true
+
+          # onefile windowed may emit .app; normalize to bare binaries for download buttons
+          for arch in Apple Intel; do
+            name="TikTok-USB-Helper-macOS-$arch"
+            if [[ -d "dist/${name}.app" ]]; then
+              cp "dist/${name}.app/Contents/MacOS/${name}" "dist/${name}"
+            fi
+            chmod +x "dist/${name}" || true
+            file "dist/${name}" || true
+          done
           ls -lh dist
-          file "dist/${{ matrix.asset }}"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.asset }}
+          name: mac-helper-apple
+          path: dist/TikTok-USB-Helper-macOS-Apple
 
-      - name: Publish release asset
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-helper-intel
+          path: dist/TikTok-USB-Helper-macOS-Intel
+
+      - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ttk-helper-v1.0.2
-          name: TikTok 免拔卡助手 macOS v1.0.2
+          tag_name: ttk-helper-v1.0.3
+          name: TikTok 免拔卡助手 macOS v1.0.3
           body: |
-            macOS 单文件程序（苹果芯片 / Intel 各一份）。
-            第一次打开若被拦截：右键打开，或到「系统设置 → 隐私与安全性」允许。
-            chmod +x 后运行。
-          files: dist/${{ matrix.asset }}
+            macOS 单文件：Apple 芯片与 Intel 各一份。
+            chmod +x 后运行；若被拦截请右键打开或到隐私与安全性允许。
+          files: |
+            dist/TikTok-USB-Helper-macOS-Apple
+            dist/TikTok-USB-Helper-macOS-Intel
           make_latest: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
