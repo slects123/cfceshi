@@ -14,17 +14,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Python with Tk
-        run: |
-          brew install python@3.12
-          brew install python-tk@3.12 || true
-          PY="$(brew --prefix python@3.12)/bin/python3.12"
-          "$PY" -c "import tkinter; print('tk', tkinter.TkVersion)"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Install PyInstaller
+      - name: Check Tk and install PyInstaller
         run: |
-          PY="$(brew --prefix python@3.12)/bin/python3.12"
-          "$PY" -m pip install --upgrade pip pyinstaller
+          python -c "import tkinter; print('tk', tkinter.TkVersion)"
+          python -m pip install --upgrade pip pyinstaller
 
       - name: Download macOS adb
         run: |
@@ -37,13 +34,12 @@ jobs:
 
       - name: Build single file
         run: |
-          PY="$(brew --prefix python@3.12)/bin/python3.12"
           ARGS=(--noconfirm --windowed --onefile --clean --name "TikTok免拔卡助手" --distpath dist)
           ARGS+=(--add-data ".bundle/adb/adb:adb")
           for f in apks/*.apk; do
             ARGS+=(--add-data "$f:apks")
           done
-          "$PY" -m PyInstaller "${ARGS[@]}" app.py
+          python -m PyInstaller "${ARGS[@]}" app.py
           codesign --force --sign - "dist/TikTok免拔卡助手" || true
           ls -lh dist
 
@@ -55,8 +51,8 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ttk-helper-v1.0.0
-          name: TikTok 免拔卡助手 macOS v1.0.0
+          tag_name: ttk-helper-v1.0.1
+          name: TikTok 免拔卡助手 macOS v1.0.1
           body: |
             macOS 单文件程序。
             第一次打开若被拦截：右键打开，或到「系统设置 → 隐私与安全性」允许。
