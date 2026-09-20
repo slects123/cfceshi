@@ -10,7 +10,19 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            arch: apple
+            artifact: mac-helper-apple
+            asset: TikTok-USB-Helper-macOS-Apple
+          - os: macos-13
+            arch: intel
+            artifact: mac-helper-intel
+            asset: TikTok-USB-Helper-macOS-Intel
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -20,6 +32,7 @@ jobs:
 
       - name: Check Tk and install PyInstaller
         run: |
+          uname -m
           python -c "import tkinter; print('tk', tkinter.TkVersion)"
           python -m pip install --upgrade pip pyinstaller
 
@@ -41,22 +54,25 @@ jobs:
           done
           python -m PyInstaller "${ARGS[@]}" app.py
           codesign --force --sign - "dist/TikTok免拔卡助手" || true
+          cp "dist/TikTok免拔卡助手" "dist/${{ matrix.asset }}"
           ls -lh dist
+          file "dist/${{ matrix.asset }}"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mac-helper
-          path: dist/TikTok免拔卡助手
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.asset }}
 
-      - name: Publish release
+      - name: Publish release asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ttk-helper-v1.0.1
-          name: TikTok 免拔卡助手 macOS v1.0.1
+          tag_name: ttk-helper-v1.0.2
+          name: TikTok 免拔卡助手 macOS v1.0.2
           body: |
-            macOS 单文件程序。
+            macOS 单文件程序（苹果芯片 / Intel 各一份）。
             第一次打开若被拦截：右键打开，或到「系统设置 → 隐私与安全性」允许。
-          files: dist/TikTok免拔卡助手
+            chmod +x 后运行。
+          files: dist/${{ matrix.asset }}
           make_latest: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
