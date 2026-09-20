@@ -1,0 +1,66 @@
+name: mac
+
+on:
+  push:
+    branches: [tiktok-usb-helper, main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Python with Tk
+        run: |
+          brew install python@3.12
+          brew install python-tk@3.12 || true
+          PY="$(brew --prefix python@3.12)/bin/python3.12"
+          "$PY" -c "import tkinter; print('tk', tkinter.TkVersion)"
+
+      - name: Install PyInstaller
+        run: |
+          PY="$(brew --prefix python@3.12)/bin/python3.12"
+          "$PY" -m pip install --upgrade pip pyinstaller
+
+      - name: Download macOS adb
+        run: |
+          curl -fL --retry 3 -o /tmp/pt.zip https://dl.google.com/android/repository/platform-tools-latest-darwin.zip
+          rm -rf /tmp/pt
+          mkdir -p /tmp/pt .bundle/adb
+          unzip -q /tmp/pt.zip -d /tmp/pt
+          cp /tmp/pt/platform-tools/adb .bundle/adb/adb
+          chmod +x .bundle/adb/adb
+
+      - name: Build single file
+        run: |
+          PY="$(brew --prefix python@3.12)/bin/python3.12"
+          ARGS=(--noconfirm --windowed --onefile --clean --name "TikTok免拔卡助手" --distpath dist)
+          ARGS+=(--add-data ".bundle/adb/adb:adb")
+          for f in apks/*.apk; do
+            ARGS+=(--add-data "$f:apks")
+          done
+          "$PY" -m PyInstaller "${ARGS[@]}" app.py
+          codesign --force --sign - "dist/TikTok免拔卡助手" || true
+          ls -lh dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-helper
+          path: dist/TikTok免拔卡助手
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ttk-helper-v1.0.0
+          name: TikTok 免拔卡助手 macOS v1.0.0
+          body: |
+            macOS 单文件程序。
+            第一次打开若被拦截：右键打开，或到「系统设置 → 隐私与安全性」允许。
+          files: dist/TikTok免拔卡助手
+          make_latest: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

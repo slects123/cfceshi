@@ -1,0 +1,8 @@
+build/
+dist/
+adb/
+.bundle/
+__pycache__/
+*.spec
+platform-tools.zip
+.DS_Store
